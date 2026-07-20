@@ -23,11 +23,11 @@ window.DOG_FILMS = [
     title: "Verity Render Test 1",
     heroTitle: "Verity",
     year: "2026",
-    runtime: "3 min 36 sec",
+    runtime: "3 min 34 sec",
     genre: "Animation",
     status: "published",
     logline: "A curious green adventurer follows a mysterious golden sphere through a block-built world.",
     poster: "assets/posters/verity-render-test-1.jpg",
-    videoUrl: "assets/movies/verity-render-test-1.mp4",
+    videoUrl: "assets/movies/verity-render-test-1.mp4?v=20260721-2",
   },
 ];

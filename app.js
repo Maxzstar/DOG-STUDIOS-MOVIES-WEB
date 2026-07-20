@@ -66,11 +66,13 @@ const configuredFilms = Array.isArray(window.DOG_FILMS)
   : [];
 
 const demoFilms = configuredFilms.length ? configuredFilms : sampleFilms;
+const LIKE_STORAGE_KEY = "dog-studios-liked-films-v1";
 
 let films = [];
 let activeFilter = "all";
 let searchTerm = "";
 let currentFilm = null;
+let likedFilmIds = new Set();
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -84,6 +86,8 @@ const playerShell = $("#playerShell");
 const playerStart = $("#playerStart");
 const playerStartLabel = $("#playerStartLabel");
 const playerStartHint = $("#playerStartHint");
+const dialogLike = $("#dialogLike");
+const dialogLikeLabel = $("#dialogLikeLabel");
 
 function escapeHTML(value = "") {
   return String(value)
@@ -92,6 +96,45 @@ function escapeHTML(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function loadLikedFilms() {
+  try {
+    const storedLikes = JSON.parse(localStorage.getItem(LIKE_STORAGE_KEY) || "[]");
+    likedFilmIds = new Set(Array.isArray(storedLikes) ? storedLikes.filter((id) => typeof id === "string") : []);
+  } catch (error) {
+    likedFilmIds = new Set();
+  }
+}
+
+function saveLikedFilms() {
+  try {
+    localStorage.setItem(LIKE_STORAGE_KEY, JSON.stringify([...likedFilmIds]));
+  } catch (error) {
+    // The like still works for this visit if browser storage is unavailable.
+  }
+}
+
+function isFilmLiked(filmId) {
+  return likedFilmIds.has(filmId);
+}
+
+function updateLikeButton() {
+  if (!currentFilm) return;
+  const liked = isFilmLiked(currentFilm.id);
+  dialogLike.classList.toggle("is-liked", liked);
+  dialogLike.setAttribute("aria-pressed", String(liked));
+  dialogLike.setAttribute("aria-label", liked ? `Remove like from ${currentFilm.title}` : `Like ${currentFilm.title}`);
+  dialogLikeLabel.textContent = liked ? "Liked" : "Like film";
+}
+
+function toggleCurrentFilmLike() {
+  if (!currentFilm) return;
+  if (isFilmLiked(currentFilm.id)) likedFilmIds.delete(currentFilm.id);
+  else likedFilmIds.add(currentFilm.id);
+  saveLikedFilms();
+  updateLikeButton();
+  renderFilms();
 }
 
 async function loadFilms() {
@@ -130,6 +173,7 @@ function renderFilms() {
           <div class="film-poster">
             <div class="film-poster-art ${posterClass(film)}"${posterStyle(film)}>
               <span class="film-badge">${film.status === "soon" ? "Coming soon" : film.videoUrl ? "Watch now" : "DOG Original"}</span>
+              ${isFilmLiked(film.id) ? '<span class="film-liked-badge" aria-hidden="true">♥</span>' : ""}
               <div class="poster-title">
                 ${escapeHTML(film.title)}
                 <small>A DOG Studios film</small>
@@ -199,6 +243,7 @@ function openFilmDetails(film) {
 
   const watchButton = $("#dialogWatch");
   watchButton.innerHTML = `<span class="play-icon" aria-hidden="true"></span> ${film.status === "soon" ? "Preview" : "Watch film"}`;
+  updateLikeButton();
   filmDialog.showModal();
   document.body.classList.add("dialog-open");
 }
@@ -290,6 +335,7 @@ function setupEvents() {
 
   $("#closeFilmDialog").addEventListener("click", closeFilmDetails);
   $("#dialogWatch").addEventListener("click", () => playFilm(currentFilm));
+  dialogLike.addEventListener("click", toggleCurrentFilmLike);
   $("#closePlayer").addEventListener("click", closePlayer);
   playerStart.addEventListener("click", startPlayback);
 
@@ -368,6 +414,7 @@ function setupReveals() {
 
 async function init() {
   $("#copyrightYear").textContent = new Date().getFullYear();
+  loadLikedFilms();
   setupEvents();
   setupReveals();
   await loadFilms();

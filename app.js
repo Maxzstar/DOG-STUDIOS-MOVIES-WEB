@@ -67,17 +67,10 @@ const configuredFilms = Array.isArray(window.DOG_FILMS)
 
 const demoFilms = configuredFilms.length ? configuredFilms : sampleFilms;
 
-const DB_NAME = "dog-studios-library";
-const STORE_NAME = "films";
-const DB_VERSION = 1;
-
-let db;
 let films = [];
 let activeFilter = "all";
 let searchTerm = "";
 let currentFilm = null;
-let playerUrl = null;
-const posterUrls = new Map();
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -86,8 +79,6 @@ const filmGrid = $("#filmGrid");
 const emptyState = $("#emptyState");
 const filmDialog = $("#filmDialog");
 const playerDialog = $("#playerDialog");
-const uploadDialog = $("#uploadDialog");
-const uploadForm = $("#uploadForm");
 const moviePlayer = $("#moviePlayer");
 const playerShell = $("#playerShell");
 const playerStart = $("#playerStart");
@@ -103,65 +94,14 @@ function escapeHTML(value = "") {
     .replaceAll("'", "&#039;");
 }
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "id" });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function readUserFilms() {
-  if (!db) return Promise.resolve([]);
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function saveUserFilm(film) {
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(film);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function removeUserFilm(id) {
-  return new Promise((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
 async function loadFilms() {
-  let userFilms = [];
-  try {
-    userFilms = await readUserFilms();
-  } catch (error) {
-    console.warn("Could not read the local film library.", error);
-  }
-  userFilms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  films = [...userFilms, ...demoFilms];
+  films = [...demoFilms];
   renderFilms();
   updateFeatured(films[0]);
 }
 
 function getPosterUrl(film) {
-  if (film.poster) return film.poster;
-  if (!film.posterBlob) return null;
-  if (!posterUrls.has(film.id)) {
-    posterUrls.set(film.id, URL.createObjectURL(film.posterBlob));
-  }
-  return posterUrls.get(film.id);
+  return film.poster || null;
 }
 
 function posterStyle(film) {
@@ -170,7 +110,6 @@ function posterStyle(film) {
 }
 
 function posterClass(film) {
-  if (film.posterBlob) return "poster-custom";
   if (film.posterClass) return film.posterClass;
   const classes = ["poster-blue", "poster-red", "poster-amber", "poster-green", "poster-violet"];
   const score = [...film.title].reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -190,7 +129,7 @@ function renderFilms() {
         <button class="film-card reveal visible" type="button" data-film-id="${escapeHTML(film.id)}" aria-label="View ${escapeHTML(film.title)}">
           <div class="film-poster">
             <div class="film-poster-art ${posterClass(film)}"${posterStyle(film)}>
-              <span class="film-badge">${film.status === "soon" ? "Coming soon" : film.videoBlob || film.videoUrl ? "Watch now" : "DOG Original"}</span>
+              <span class="film-badge">${film.status === "soon" ? "Coming soon" : film.videoUrl ? "Watch now" : "DOG Original"}</span>
               <div class="poster-title">
                 ${escapeHTML(film.title)}
                 <small>A DOG Studios film</small>
@@ -258,7 +197,6 @@ function openFilmDetails(film) {
   const imageUrl = getPosterUrl(film);
   dialogPoster.style.backgroundImage = imageUrl ? `url('${imageUrl}')` : "";
 
-  $("#dialogDelete").hidden = Boolean(film.demo);
   const watchButton = $("#dialogWatch");
   watchButton.innerHTML = `<span class="play-icon" aria-hidden="true"></span> ${film.status === "soon" ? "Preview" : "Watch film"}`;
   filmDialog.showModal();
@@ -277,13 +215,11 @@ async function playFilm(film) {
   $("#playerTitle").textContent = film.title;
   playerShell.className = "player-shell";
 
-  if (film.videoBlob || film.videoUrl) {
-    if (playerUrl) URL.revokeObjectURL(playerUrl);
-    playerUrl = film.videoBlob ? URL.createObjectURL(film.videoBlob) : null;
+  if (film.videoUrl) {
     const filmPoster = getPosterUrl(film);
     if (filmPoster) moviePlayer.poster = filmPoster;
     else moviePlayer.removeAttribute("poster");
-    moviePlayer.src = playerUrl || film.videoUrl;
+    moviePlayer.src = film.videoUrl;
     moviePlayer.load();
     playerStartLabel.textContent = "Play movie";
     playerStartHint.textContent = film.runtime || "Press to start";
@@ -321,125 +257,9 @@ function closePlayer() {
   moviePlayer.removeAttribute("src");
   moviePlayer.removeAttribute("poster");
   moviePlayer.load();
-  if (playerUrl) URL.revokeObjectURL(playerUrl);
-  playerUrl = null;
   playerShell.className = "player-shell";
   if (playerDialog.open) playerDialog.close();
   document.body.classList.remove("dialog-open");
-}
-
-function openUpload() {
-  closeMobileMenu();
-  uploadDialog.showModal();
-  document.body.classList.add("dialog-open");
-  setTimeout(() => uploadForm.elements.title.focus(), 100);
-}
-
-function closeUpload() {
-  if (uploadDialog.open) uploadDialog.close();
-  document.body.classList.remove("dialog-open");
-}
-
-function formatFileName(file) {
-  if (!file) return null;
-  if (file.size < 1024 * 1024) return `${file.name} · ${Math.ceil(file.size / 1024)} KB`;
-  return `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function showToast(message) {
-  const toast = $("#toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(showToast.timeout);
-  showToast.timeout = setTimeout(() => toast.classList.remove("show"), 3200);
-}
-
-async function hasStorageSpace(requiredBytes) {
-  if (!navigator.storage?.estimate) return true;
-  const { quota = Infinity, usage = 0 } = await navigator.storage.estimate();
-  return usage + requiredBytes < quota * 0.92;
-}
-
-async function handleUpload(event) {
-  event.preventDefault();
-  if (!db) {
-    showToast("Local storage is unavailable in this browser");
-    return;
-  }
-
-  const data = new FormData(uploadForm);
-  const posterFile = data.get("poster");
-  const videoFile = data.get("video");
-  const posterBlob = posterFile?.size ? posterFile : null;
-  const videoBlob = videoFile?.size ? videoFile : null;
-
-  if (posterBlob && posterBlob.size > 20 * 1024 * 1024) {
-    showToast("Please use a poster smaller than 20 MB");
-    return;
-  }
-
-  const totalBytes = (posterBlob?.size || 0) + (videoBlob?.size || 0);
-  if (!(await hasStorageSpace(totalBytes))) {
-    showToast("This video is too large for your browser storage");
-    return;
-  }
-
-  const saveButton = $("#saveFilm");
-  saveButton.classList.add("is-loading");
-  saveButton.disabled = true;
-
-  const film = {
-    id: `film-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: data.get("title").trim(),
-    year: String(data.get("year")).trim(),
-    runtime: data.get("runtime").trim() || "Runtime TBA",
-    genre: data.get("genre").trim() || "Film",
-    status: data.get("status"),
-    logline: data.get("logline").trim(),
-    posterBlob,
-    videoBlob,
-    createdAt: Date.now(),
-    demo: false,
-  };
-
-  try {
-    if (navigator.storage?.persist) await navigator.storage.persist();
-    await saveUserFilm(film);
-    uploadForm.reset();
-    uploadForm.elements.year.value = new Date().getFullYear();
-    $("#posterFileName").textContent = "Choose image";
-    $("#videoFileName").textContent = "Choose video";
-    closeUpload();
-    await loadFilms();
-    showToast(`${film.title} was added to your library`);
-    document.querySelector("#films").scrollIntoView({ behavior: "smooth" });
-  } catch (error) {
-    console.error(error);
-    showToast("Could not save this film — try a smaller video");
-  } finally {
-    saveButton.classList.remove("is-loading");
-    saveButton.disabled = false;
-  }
-}
-
-async function deleteCurrentFilm() {
-  if (!currentFilm || currentFilm.demo) return;
-  const approved = window.confirm(`Delete “${currentFilm.title}” from this device?`);
-  if (!approved) return;
-
-  try {
-    const deletedTitle = currentFilm.title;
-    await removeUserFilm(currentFilm.id);
-    const oldUrl = posterUrls.get(currentFilm.id);
-    if (oldUrl) URL.revokeObjectURL(oldUrl);
-    posterUrls.delete(currentFilm.id);
-    closeFilmDetails();
-    await loadFilms();
-    showToast(`${deletedTitle} was deleted`);
-  } catch (error) {
-    console.error(error);
-    showToast("Could not delete this film");
-  }
 }
 
 function closeMobileMenu() {
@@ -452,18 +272,6 @@ function setupEvents() {
   filmGrid.addEventListener("click", (event) => {
     const card = event.target.closest("[data-film-id]");
     if (card) openFilmDetails(findFilm(card.dataset.filmId));
-  });
-
-  $$("[data-open-upload]").forEach((button) => button.addEventListener("click", openUpload));
-  $("#closeUpload").addEventListener("click", closeUpload);
-  $("#cancelUpload").addEventListener("click", closeUpload);
-  uploadForm.addEventListener("submit", handleUpload);
-
-  uploadForm.elements.poster.addEventListener("change", (event) => {
-    $("#posterFileName").textContent = formatFileName(event.target.files[0]) || "Choose image";
-  });
-  uploadForm.elements.video.addEventListener("change", (event) => {
-    $("#videoFileName").textContent = formatFileName(event.target.files[0]) || "Choose video";
   });
 
   $$(".filter").forEach((button) => {
@@ -482,7 +290,6 @@ function setupEvents() {
 
   $("#closeFilmDialog").addEventListener("click", closeFilmDetails);
   $("#dialogWatch").addEventListener("click", () => playFilm(currentFilm));
-  $("#dialogDelete").addEventListener("click", deleteCurrentFilm);
   $("#closePlayer").addEventListener("click", closePlayer);
   playerStart.addEventListener("click", startPlayback);
 
@@ -517,13 +324,11 @@ function setupEvents() {
   $("#watchFeatured").addEventListener("click", (event) => playFilm(findFilm(event.currentTarget.dataset.filmId)));
   $("#featuredDetails").addEventListener("click", (event) => openFilmDetails(findFilm(event.currentTarget.dataset.filmId)));
 
-  [filmDialog, uploadDialog].forEach((dialog) => {
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) {
-        dialog.close();
-        document.body.classList.remove("dialog-open");
-      }
-    });
+  filmDialog.addEventListener("click", (event) => {
+    if (event.target === filmDialog) {
+      filmDialog.close();
+      document.body.classList.remove("dialog-open");
+    }
   });
 
   playerDialog.addEventListener("click", (event) => {
@@ -543,7 +348,6 @@ function setupEvents() {
     if (event.key !== "Escape") return;
     if (playerDialog.open) closePlayer();
     else if (filmDialog.open) closeFilmDetails();
-    else if (uploadDialog.open) closeUpload();
   });
 }
 
@@ -564,23 +368,9 @@ function setupReveals() {
 
 async function init() {
   $("#copyrightYear").textContent = new Date().getFullYear();
-  uploadForm.elements.year.value = new Date().getFullYear();
   setupEvents();
   setupReveals();
-
-  try {
-    db = await openDatabase();
-  } catch (error) {
-    console.warn("IndexedDB is unavailable. Demo mode only.", error);
-    showToast("Your browser is in demo mode — uploads cannot be saved");
-  }
-
   await loadFilms();
 }
-
-window.addEventListener("beforeunload", () => {
-  posterUrls.forEach((url) => URL.revokeObjectURL(url));
-  if (playerUrl) URL.revokeObjectURL(playerUrl);
-});
 
 init();

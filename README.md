@@ -17,7 +17,7 @@ GitHub will show the public Pages address after deployment finishes.
 
 ## Add a public movie
 
-The **Add a film** button saves a movie privately inside the current browser. This is handy for previewing the poster and playback, but browsers cannot write changes back to a static GitHub repository.
+Send the movie file to Codex and ask for it to be added. The public website intentionally has no visitor upload button.
 
 To publish a movie for every visitor:
 

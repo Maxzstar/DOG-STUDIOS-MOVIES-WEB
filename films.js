@@ -17,4 +17,17 @@
 //   videoUrl: "assets/movies/my-first-movie.mp4"
 // }
 
-window.DOG_FILMS = [];
+window.DOG_FILMS = [
+  {
+    id: "verity-render-test-1",
+    title: "Verity Render Test 1",
+    heroTitle: "Verity",
+    year: "2026",
+    runtime: "3 min 36 sec",
+    genre: "Animation",
+    status: "published",
+    logline: "A curious green adventurer follows a mysterious golden sphere through a block-built world.",
+    poster: "assets/posters/verity-render-test-1.jpg",
+    videoUrl: "assets/movies/verity-render-test-1.mp4",
+  },
+];

@@ -273,6 +273,11 @@ svg {
   text-transform: none;
 }
 
+.hero h1.long-title {
+  font-size: clamp(60px, 7vw, 105px);
+  line-height: 0.82;
+}
+
 .hero-logline {
   max-width: 480px;
   margin: 34px 0 0;

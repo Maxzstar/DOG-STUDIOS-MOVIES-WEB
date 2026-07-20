@@ -222,9 +222,12 @@ function splitHeroTitle(title) {
 function updateFeatured(film) {
   if (!film) return;
   const heroBackdrop = $("#heroBackdrop");
+  const heroTitle = $("#heroTitle");
+  const displayTitle = film.heroTitle || film.title;
   const imageUrl = getPosterUrl(film) || film.heroImage || "assets/cinematic-motel-hero.png";
   heroBackdrop.style.backgroundImage = `url('${imageUrl}')`;
-  $("#heroTitle").innerHTML = splitHeroTitle(film.title);
+  heroTitle.classList.toggle("long-title", displayTitle.length > 18);
+  heroTitle.innerHTML = splitHeroTitle(displayTitle);
   $("#heroLogline").textContent = film.logline;
   $("#heroYear").textContent = film.year || "—";
   $("#heroRuntime").textContent = film.runtime || "—";

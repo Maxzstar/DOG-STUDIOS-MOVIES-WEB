@@ -90,6 +90,9 @@ const uploadDialog = $("#uploadDialog");
 const uploadForm = $("#uploadForm");
 const moviePlayer = $("#moviePlayer");
 const playerShell = $("#playerShell");
+const playerStart = $("#playerStart");
+const playerStartLabel = $("#playerStartLabel");
+const playerStartHint = $("#playerStartHint");
 
 function escapeHTML(value = "") {
   return String(value)
@@ -272,36 +275,55 @@ async function playFilm(film) {
   if (filmDialog.open) filmDialog.close();
   currentFilm = film;
   $("#playerTitle").textContent = film.title;
-  playerShell.classList.remove("has-video");
+  playerShell.className = "player-shell";
 
   if (film.videoBlob || film.videoUrl) {
     if (playerUrl) URL.revokeObjectURL(playerUrl);
     playerUrl = film.videoBlob ? URL.createObjectURL(film.videoBlob) : null;
+    const filmPoster = getPosterUrl(film);
+    if (filmPoster) moviePlayer.poster = filmPoster;
+    else moviePlayer.removeAttribute("poster");
     moviePlayer.src = playerUrl || film.videoUrl;
-    playerShell.classList.add("has-video");
+    moviePlayer.load();
+    playerStartLabel.textContent = "Play movie";
+    playerStartHint.textContent = film.runtime || "Press to start";
+    playerShell.classList.add("has-video", "needs-play");
   } else {
     moviePlayer.removeAttribute("src");
+    moviePlayer.removeAttribute("poster");
     moviePlayer.load();
   }
 
   playerDialog.showModal();
   document.body.classList.add("dialog-open");
-  if (film.videoBlob || film.videoUrl) {
-    try {
-      await moviePlayer.play();
-    } catch (error) {
-      // Browsers may require the viewer to press play themselves.
-    }
+}
+
+async function startPlayback() {
+  if (!moviePlayer.src) return;
+  if (playerShell.classList.contains("is-loading")) return;
+  playerShell.classList.remove("needs-play", "has-error", "is-playing");
+  playerShell.classList.add("is-loading");
+  playerStartLabel.textContent = "Starting…";
+  playerStartHint.textContent = "Preparing the movie";
+
+  try {
+    await moviePlayer.play();
+  } catch (error) {
+    playerShell.classList.remove("is-loading", "is-playing");
+    playerShell.classList.add("has-error");
+    playerStartLabel.textContent = "Try again";
+    playerStartHint.textContent = "Your browser paused playback";
   }
 }
 
 function closePlayer() {
   moviePlayer.pause();
   moviePlayer.removeAttribute("src");
+  moviePlayer.removeAttribute("poster");
   moviePlayer.load();
   if (playerUrl) URL.revokeObjectURL(playerUrl);
   playerUrl = null;
-  playerShell.classList.remove("has-video");
+  playerShell.className = "player-shell";
   if (playerDialog.open) playerDialog.close();
   document.body.classList.remove("dialog-open");
 }
@@ -462,6 +484,35 @@ function setupEvents() {
   $("#dialogWatch").addEventListener("click", () => playFilm(currentFilm));
   $("#dialogDelete").addEventListener("click", deleteCurrentFilm);
   $("#closePlayer").addEventListener("click", closePlayer);
+  playerStart.addEventListener("click", startPlayback);
+
+  moviePlayer.addEventListener("playing", () => {
+    playerShell.classList.remove("needs-play", "is-loading", "has-error");
+    playerShell.classList.add("is-playing");
+  });
+
+  moviePlayer.addEventListener("waiting", () => {
+    if (moviePlayer.paused || moviePlayer.currentTime === 0) return;
+    playerShell.classList.remove("is-playing");
+    playerShell.classList.add("is-loading");
+    playerStartLabel.textContent = "Buffering…";
+    playerStartHint.textContent = "Playback will resume automatically";
+  });
+
+  moviePlayer.addEventListener("ended", () => {
+    playerShell.classList.remove("is-playing", "is-loading");
+    playerShell.classList.add("needs-play");
+    playerStartLabel.textContent = "Watch again";
+    playerStartHint.textContent = currentFilm?.runtime || "Replay movie";
+  });
+
+  moviePlayer.addEventListener("error", () => {
+    if (!moviePlayer.src) return;
+    playerShell.classList.remove("is-playing", "is-loading");
+    playerShell.classList.add("has-error");
+    playerStartLabel.textContent = "Try again";
+    playerStartHint.textContent = "The movie could not start";
+  });
 
   $("#watchFeatured").addEventListener("click", (event) => playFilm(findFilm(event.currentTarget.dataset.filmId)));
   $("#featuredDetails").addEventListener("click", (event) => openFilmDetails(findFilm(event.currentTarget.dataset.filmId)));

@@ -10,7 +10,7 @@
     />
     <title>DOG Studios — Original Films</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260721-1" />
+    <link rel="stylesheet" href="styles.css?v=20260721-2" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -175,7 +175,12 @@
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg>
       </button>
       <div class="player-shell" id="playerShell">
-        <video id="moviePlayer" controls playsinline></video>
+        <video id="moviePlayer" controls playsinline preload="metadata"></video>
+        <button class="player-start" id="playerStart" type="button" aria-label="Play movie">
+          <span class="player-start-icon" aria-hidden="true"><span class="play-icon"></span></span>
+          <strong id="playerStartLabel">Play movie</strong>
+          <small id="playerStartHint">Press to start</small>
+        </button>
         <div class="player-placeholder" id="playerPlaceholder">
           <span class="large-play" aria-hidden="true"></span>
           <p>There isn’t a video attached to this film yet.</p>
@@ -264,7 +269,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="films.js?v=20260721-1"></script>
-    <script src="app.js?v=20260721-1"></script>
+    <script src="films.js?v=20260721-2"></script>
+    <script src="app.js?v=20260721-2"></script>
   </body>
 </html>

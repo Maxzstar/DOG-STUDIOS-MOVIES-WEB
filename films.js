@@ -27,7 +27,7 @@ window.DOG_FILMS = [
     genre: "Animation",
     status: "published",
     logline: "A curious green adventurer follows a mysterious golden sphere through a block-built world.",
-    poster: "assets/posters/verity-render-test-1.jpg",
+    poster: "assets/posters/verity-render-test-1.png?v=20260721-1",
     videoUrl: "assets/movies/verity-render-test-1.mp4?v=20260721-2",
   },
 ];

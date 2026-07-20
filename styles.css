@@ -543,6 +543,8 @@ svg {
   flex-direction: column;
   justify-content: space-between;
   padding: clamp(18px, 2vw, 30px);
+  background-position: center;
+  background-size: cover;
   color: #fff;
   transition: transform 0.7s var(--ease);
 }

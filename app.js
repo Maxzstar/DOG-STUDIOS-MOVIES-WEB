@@ -67,12 +67,80 @@ const configuredFilms = Array.isArray(window.DOG_FILMS)
 
 const demoFilms = configuredFilms.length ? configuredFilms : sampleFilms;
 const LIKE_STORAGE_KEY = "dog-studios-liked-films-v1";
+const QUEST_STORAGE_KEY = "dog-studios-quests-v1";
+const QUESTS = [
+  {
+    id: "opening-night",
+    symbol: "▶",
+    title: "Opening Night",
+    description: "Start watching your first DOG Studios movie.",
+    metric: "startedFilms",
+    target: 1,
+    xp: 50,
+  },
+  {
+    id: "favorite-find",
+    symbol: "♥",
+    title: "Favorite Find",
+    description: "Like a film and add it to your personal favorites.",
+    metric: "likedFilms",
+    target: 1,
+    xp: 75,
+  },
+  {
+    id: "credits-roller",
+    symbol: "★",
+    title: "Credits Roller",
+    description: "Finish one movie or watch at least 80% of it.",
+    metric: "watchedFilms",
+    target: 1,
+    xp: 100,
+  },
+  {
+    id: "triple-feature",
+    symbol: "III",
+    title: "Triple Feature",
+    description: "Finish three different movies from the studio library.",
+    metric: "watchedFilms",
+    target: 3,
+    xp: 250,
+  },
+  {
+    id: "studio-explorer",
+    symbol: "⌕",
+    title: "Studio Explorer",
+    description: "Open the details for three different films.",
+    metric: "exploredFilms",
+    target: 3,
+    xp: 75,
+  },
+  {
+    id: "marathon-mode",
+    symbol: "∞",
+    title: "Marathon Mode",
+    description: "Spend fifteen minutes watching DOG Studios movies.",
+    metric: "watchSeconds",
+    target: 15 * 60,
+    xp: 150,
+  },
+];
+const QUEST_RANKS = [
+  { name: "New Viewer", xp: 0 },
+  { name: "Cinema Scout", xp: 100 },
+  { name: "Film Hunter", xp: 250 },
+  { name: "Studio Insider", xp: 450 },
+  { name: "DOG Studios Legend", xp: 700 },
+];
 
 let films = [];
 let activeFilter = "all";
 let searchTerm = "";
 let currentFilm = null;
 let likedFilmIds = new Set();
+let questState = createDefaultQuestState();
+let questLastMediaTime = 0;
+let questLastSaveBucket = 0;
+let completedQuestIds = new Set();
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -88,6 +156,9 @@ const playerStartLabel = $("#playerStartLabel");
 const playerStartHint = $("#playerStartHint");
 const dialogLike = $("#dialogLike");
 const dialogLikeLabel = $("#dialogLikeLabel");
+const questGrid = $("#questGrid");
+const questToast = $("#questToast");
+const questToastTitle = $("#questToastTitle");
 
 function escapeHTML(value = "") {
   return String(value)
@@ -115,6 +186,186 @@ function saveLikedFilms() {
   }
 }
 
+function createDefaultQuestState() {
+  return {
+    startedFilms: [],
+    likedFilms: [],
+    watchedFilms: [],
+    exploredFilms: [],
+    watchSeconds: 0,
+  };
+}
+
+function normalizeQuestFilmIds(value) {
+  return Array.isArray(value) ? [...new Set(value.filter((id) => typeof id === "string"))] : [];
+}
+
+function loadQuestState() {
+  const fallback = createDefaultQuestState();
+  try {
+    const stored = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || "null") || fallback;
+    questState = {
+      startedFilms: normalizeQuestFilmIds(stored.startedFilms),
+      likedFilms: normalizeQuestFilmIds(stored.likedFilms),
+      watchedFilms: normalizeQuestFilmIds(stored.watchedFilms),
+      exploredFilms: normalizeQuestFilmIds(stored.exploredFilms),
+      watchSeconds: Number.isFinite(Number(stored.watchSeconds)) ? Math.max(0, Number(stored.watchSeconds)) : 0,
+    };
+  } catch (error) {
+    questState = fallback;
+  }
+
+  let likesAdded = false;
+  likedFilmIds.forEach((filmId) => {
+    if (!questState.likedFilms.includes(filmId)) {
+      questState.likedFilms.push(filmId);
+      likesAdded = true;
+    }
+  });
+  questLastSaveBucket = Math.floor(questState.watchSeconds / 5);
+  if (likesAdded) saveQuestState();
+}
+
+function saveQuestState() {
+  try {
+    localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(questState));
+  } catch (error) {
+    // Quest progress remains available for this visit if storage is blocked.
+  }
+}
+
+function getQuestValue(quest) {
+  if (quest.metric === "watchSeconds") return questState.watchSeconds;
+  return questState[quest.metric].length;
+}
+
+function getCompletedQuestXp() {
+  return QUESTS.reduce((total, quest) => total + (getQuestValue(quest) >= quest.target ? quest.xp : 0), 0);
+}
+
+function getQuestRank(xp) {
+  let rankIndex = 0;
+  QUEST_RANKS.forEach((rank, index) => {
+    if (xp >= rank.xp) rankIndex = index;
+  });
+
+  const current = QUEST_RANKS[rankIndex];
+  const next = QUEST_RANKS[rankIndex + 1] || null;
+  const progress = next ? ((xp - current.xp) / (next.xp - current.xp)) * 100 : 100;
+  return {
+    current,
+    next,
+    progress: Math.max(0, Math.min(100, progress)),
+  };
+}
+
+function getQuestProgressText(quest, value) {
+  if (quest.metric === "watchSeconds") {
+    const currentMinutes = Math.min(quest.target, value) / 60;
+    const shownMinutes = currentMinutes < 1 ? currentMinutes.toFixed(1) : Math.floor(currentMinutes);
+    return `${shownMinutes} / ${quest.target / 60} min`;
+  }
+  return `${Math.min(value, quest.target)} / ${quest.target}`;
+}
+
+function showQuestUnlock(quests) {
+  const firstQuest = quests[0];
+  if (!firstQuest) return;
+  questToastTitle.textContent = quests.length > 1 ? `${firstQuest.title} + ${quests.length - 1} more` : firstQuest.title;
+  questToast.classList.remove("show");
+  void questToast.offsetWidth;
+  questToast.classList.add("show");
+  clearTimeout(showQuestUnlock.timeout);
+  showQuestUnlock.timeout = setTimeout(() => questToast.classList.remove("show"), 4200);
+}
+
+function renderQuests(announceUnlocks = false) {
+  const completedNow = new Set();
+
+  questGrid.innerHTML = QUESTS.map((quest, index) => {
+    const value = getQuestValue(quest);
+    const completed = value >= quest.target;
+    if (completed) completedNow.add(quest.id);
+    const percent = Math.max(0, Math.min(100, (value / quest.target) * 100));
+    const progressText = getQuestProgressText(quest, value);
+
+    return `
+      <article class="quest-card${completed ? " is-complete" : ""}">
+        <div class="quest-card-top">
+          <span class="quest-number">${String(index + 1).padStart(2, "0")}</span>
+          <span class="quest-reward">+${quest.xp} XP</span>
+        </div>
+        <span class="quest-symbol" aria-hidden="true">${escapeHTML(quest.symbol)}</span>
+        <div class="quest-copy">
+          <p>${completed ? "Quest complete" : "Viewer quest"}</p>
+          <h3>${escapeHTML(quest.title)}</h3>
+          <span>${escapeHTML(quest.description)}</span>
+        </div>
+        <div class="quest-progress">
+          <div><strong>${progressText}</strong><span>${completed ? "Complete" : "In progress"}</span></div>
+          <div class="quest-progress-track" role="progressbar" aria-label="${escapeHTML(quest.title)} progress" aria-valuemin="0" aria-valuemax="${quest.target}" aria-valuenow="${Math.min(value, quest.target)}">
+            <i style="width:${percent}%"></i>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  const xp = getCompletedQuestXp();
+  const rank = getQuestRank(xp);
+  $("#questXp").textContent = xp;
+  $("#questRank").textContent = rank.current.name;
+  $("#questXpBar").style.width = `${rank.progress}%`;
+  $("#questNextRank").textContent = rank.next ? `${rank.next.xp - xp} XP to ${rank.next.name}` : "Highest rank reached";
+
+  if (announceUnlocks) {
+    const newUnlocks = QUESTS.filter((quest) => completedNow.has(quest.id) && !completedQuestIds.has(quest.id));
+    showQuestUnlock(newUnlocks);
+  }
+  completedQuestIds = completedNow;
+}
+
+function recordQuestFilm(collection, filmId) {
+  if (!filmId || questState[collection].includes(filmId)) return false;
+  questState[collection].push(filmId);
+  saveQuestState();
+  renderQuests(true);
+  return true;
+}
+
+function trackQuestWatchTime() {
+  const currentTime = Number(moviePlayer.currentTime) || 0;
+  const delta = currentTime - questLastMediaTime;
+  questLastMediaTime = currentTime;
+  if (moviePlayer.paused || delta <= 0 || delta > 3) return;
+
+  questState.watchSeconds += delta;
+  let completedFilm = false;
+  if (
+    currentFilm &&
+    Number.isFinite(moviePlayer.duration) &&
+    moviePlayer.duration > 0 &&
+    currentTime / moviePlayer.duration >= 0.8 &&
+    !questState.watchedFilms.includes(currentFilm.id)
+  ) {
+    questState.watchedFilms.push(currentFilm.id);
+    completedFilm = true;
+  }
+
+  const saveBucket = Math.floor(questState.watchSeconds / 5);
+  if (completedFilm || saveBucket !== questLastSaveBucket) {
+    questLastSaveBucket = saveBucket;
+    saveQuestState();
+    renderQuests(true);
+  }
+}
+
+function flushQuestProgress() {
+  questLastMediaTime = Number(moviePlayer.currentTime) || 0;
+  saveQuestState();
+  renderQuests(true);
+}
+
 function isFilmLiked(filmId) {
   return likedFilmIds.has(filmId);
 }
@@ -131,7 +382,10 @@ function updateLikeButton() {
 function toggleCurrentFilmLike() {
   if (!currentFilm) return;
   if (isFilmLiked(currentFilm.id)) likedFilmIds.delete(currentFilm.id);
-  else likedFilmIds.add(currentFilm.id);
+  else {
+    likedFilmIds.add(currentFilm.id);
+    recordQuestFilm("likedFilms", currentFilm.id);
+  }
   saveLikedFilms();
   updateLikeButton();
   renderFilms();
@@ -229,6 +483,7 @@ function findFilm(id) {
 function openFilmDetails(film) {
   if (!film) return;
   currentFilm = film;
+  recordQuestFilm("exploredFilms", film.id);
   $("#dialogTitle").textContent = film.title;
   $("#dialogLogline").textContent = film.logline;
   $("#dialogMeta").innerHTML = [film.year, film.runtime, film.genre, film.status === "soon" ? "Coming soon" : "Released"]
@@ -298,11 +553,13 @@ async function startPlayback() {
 }
 
 function closePlayer() {
+  flushQuestProgress();
   moviePlayer.pause();
   moviePlayer.removeAttribute("src");
   moviePlayer.removeAttribute("poster");
   moviePlayer.load();
   playerShell.className = "player-shell";
+  questLastMediaTime = 0;
   if (playerDialog.open) playerDialog.close();
   document.body.classList.remove("dialog-open");
 }
@@ -342,7 +599,15 @@ function setupEvents() {
   moviePlayer.addEventListener("playing", () => {
     playerShell.classList.remove("needs-play", "is-loading", "has-error");
     playerShell.classList.add("is-playing");
+    questLastMediaTime = Number(moviePlayer.currentTime) || 0;
+    if (currentFilm) recordQuestFilm("startedFilms", currentFilm.id);
   });
+
+  moviePlayer.addEventListener("timeupdate", trackQuestWatchTime);
+  moviePlayer.addEventListener("seeking", () => {
+    questLastMediaTime = Number(moviePlayer.currentTime) || 0;
+  });
+  moviePlayer.addEventListener("pause", flushQuestProgress);
 
   moviePlayer.addEventListener("waiting", () => {
     if (moviePlayer.paused || moviePlayer.currentTime === 0) return;
@@ -353,6 +618,7 @@ function setupEvents() {
   });
 
   moviePlayer.addEventListener("ended", () => {
+    if (currentFilm) recordQuestFilm("watchedFilms", currentFilm.id);
     playerShell.classList.remove("is-playing", "is-loading");
     playerShell.classList.add("needs-play");
     playerStartLabel.textContent = "Watch again";
@@ -395,6 +661,11 @@ function setupEvents() {
     if (playerDialog.open) closePlayer();
     else if (filmDialog.open) closeFilmDetails();
   });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) saveQuestState();
+  });
+  window.addEventListener("beforeunload", saveQuestState);
 }
 
 function setupReveals() {
@@ -415,9 +686,11 @@ function setupReveals() {
 async function init() {
   $("#copyrightYear").textContent = new Date().getFullYear();
   loadLikedFilms();
+  loadQuestState();
   setupEvents();
   setupReveals();
   await loadFilms();
+  renderQuests(false);
 }
 
 init();

@@ -10,7 +10,7 @@
     />
     <title>DOG Studios — Original Films</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260721-6" />
+    <link rel="stylesheet" href="styles.css?v=20260724-1" />
   </head>
   <body>
     <div class="noise" aria-hidden="true"></div>
@@ -23,6 +23,7 @@
 
       <nav class="desktop-nav" aria-label="Main navigation">
         <a href="#films">Films</a>
+        <a href="#quests">Quests</a>
         <a href="#about">About</a>
         <a href="#contact">Contact</a>
       </nav>
@@ -34,6 +35,7 @@
 
     <nav class="mobile-nav" id="mobileNav" aria-label="Mobile navigation">
       <a href="#films">Films</a>
+      <a href="#quests">Quests</a>
       <a href="#about">About</a>
       <a href="#contact">Contact</a>
     </nav>
@@ -100,6 +102,27 @@
           <h3>No films here yet.</h3>
           <p>More DOG Studios productions will appear here soon.</p>
         </div>
+      </section>
+
+      <section class="quests-section" id="quests" aria-labelledby="questsTitle">
+        <div class="quests-heading reveal">
+          <div>
+            <p class="eyebrow"><span></span> Viewer missions</p>
+            <h2 id="questsTitle">Studio<br /><i>Quests.</i></h2>
+          </div>
+          <div class="quest-profile" aria-label="Your quest rank and experience">
+            <div>
+              <span>Your rank</span>
+              <strong id="questRank">New Viewer</strong>
+            </div>
+            <div class="quest-xp-copy"><strong id="questXp">0</strong><span> XP</span></div>
+            <div class="quest-xp-track" aria-hidden="true"><i id="questXpBar"></i></div>
+            <small id="questNextRank">100 XP to Cinema Scout</small>
+          </div>
+        </div>
+
+        <div class="quest-grid reveal" id="questGrid"></div>
+        <p class="quest-save-note reveal"><span aria-hidden="true">●</span> Quest progress saves on this device.</p>
       </section>
 
       <section class="manifesto" id="about" aria-labelledby="aboutTitle">
@@ -186,7 +209,12 @@
       </div>
     </dialog>
 
-    <script src="films.js?v=20260721-6"></script>
-    <script src="app.js?v=20260721-6"></script>
+    <div class="quest-toast" id="questToast" role="status" aria-live="polite">
+      <span>Quest complete</span>
+      <strong id="questToastTitle"></strong>
+    </div>
+
+    <script src="films.js?v=20260724-1"></script>
+    <script src="app.js?v=20260724-1"></script>
   </body>
 </html>
